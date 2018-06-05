@@ -15,16 +15,20 @@ q = Queue()
 writinglock = threading.Lock()
 
 #number of pictures returned per page
-perpage = 500
+perpage = 100
 
 
-
-def trying(searchterm,amount=10, path=''):
+#main function with three paramenters, automatically downloads pictures with searched term into folder with set filepath.
+def main(searchterm,amount=10, path=''):
+    pagenumber = 1
+    counter = 0
     apiurl = "https://api.flickr.com/services/rest/" \
          "?method=flickr.photos.search&api_key="+apikey+\
-             "&text="+searchterm+"&per_page="+perpage+"&format=json&nojsoncallback=1"
+             "&text="+searchterm+"&per_page="+str(perpage)+"&page"+str(pagenumber)+"&format=json&nojsoncallback=1"
     response = requests.get(apiurl)
     response = response.json()
+
+
 
     if path != "":
         filepath = os.path.relpath(path,os.getcwd()+os.sep+searchterm)+os.sep+searchterm
@@ -45,26 +49,29 @@ def trying(searchterm,amount=10, path=''):
             print('not enought image found, saving existing'+response.get('total')+"images")
         else:
             toparse = amount
-        print(response)
-        print(total)
-        photolist = response.get('photo')
-        print(len(photolist))
+        while toparse - perpage > -perpage:
+            apiurl = "https://api.flickr.com/services/rest/" \
+                     "?method=flickr.photos.search&api_key=" + apikey + \
+                     "&text=" + searchterm + "&per_page=" + str(perpage) + "&page" + str(pagenumber) + "&format=json&nojsoncallback=1"
+            response = requests.get(apiurl).json().get('photos')
+            photolist = response.get('photo')
+            actual_perpage=len(photolist)
 
-        for x in len(photolist):
-            q.put((photolist[x].get('id'), filepath + os.sep + searchterm + str(x)))
-            toparse
+            for x in range(0,actual_perpage):
+                q.put((photolist[x].get('id'), filepath + os.sep + searchterm + str(counter)))
+                counter += 1
 
-        # wait until the thread terminates.
+            # wait until the thread terminates.
+            toparse = toparse-actual_perpage
+            for x in range(10):
+                t = threading.Thread(target=threader)
 
-        for x in range(10):
-            t = threading.Thread(target=threader)
+                # classifying as a daemon, so they will die when the main dies
+                t.daemon = True
 
-            # classifying as a daemon, so they will die when the main dies
-            t.daemon = True
-
-            # begins, must come after daemon definition
-            t.start()
-
+                # begins, must come after daemon definition
+                t.start()
+            pagenumber += 1
 
 
 
@@ -84,7 +91,8 @@ def downloadimg(photo_id,name=''):
         response= response.get('sizes')
 
         if response.get("candownload") == 1:
-            url = response.get('size')[-1].get('source')
+            #gets the best quality, as list sorted in increasing resolution
+            url = response.get('size')[0].get('source')
             print(url)
 
             with writinglock:
@@ -96,6 +104,6 @@ def threader():
         downloadimg(worker[0],worker[1])
         q.task_done()
 
-trying('pig', 80, 'pictures/test')
+main('pig', 350, 'pictures/test')
 
 
