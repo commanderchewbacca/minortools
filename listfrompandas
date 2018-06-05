@@ -5,13 +5,24 @@ import urllib.request
 import urllib
 import os
 import os.path
+import threading
+from queue import Queue
+
+
 apikey= "a66325f81b70da9ac277c027cf9e7371"
 # hi= "a66325f81b70da9ac277c027cf9e7371"+"Secret: 49453dbf41f087e0"
+q = Queue()
+writinglock = threading.Lock()
+
+#number of pictures returned per page
+perpage = 500
+
+
 
 def trying(searchterm,amount=10, path=''):
     apiurl = "https://api.flickr.com/services/rest/" \
          "?method=flickr.photos.search&api_key="+apikey+\
-             "&text="+searchterm+"&per_page=10&format=json&nojsoncallback=1"
+             "&text="+searchterm+"&per_page="+perpage+"&format=json&nojsoncallback=1"
     response = requests.get(apiurl)
     response = response.json()
 
@@ -21,7 +32,6 @@ def trying(searchterm,amount=10, path=''):
         filepath = searchterm
     if not os.path.exists(filepath):
         os.makedirs(filepath)
-
 
 
     if response.get("stat")=='ok':
@@ -35,18 +45,38 @@ def trying(searchterm,amount=10, path=''):
             print('not enought image found, saving existing'+response.get('total')+"images")
         else:
             toparse = amount
-            photolist = response.get('photo')
+        print(response)
+        print(total)
+        photolist = response.get('photo')
+        print(len(photolist))
 
-        for x in range(0, toparse):
-            downloadimg(photolist[x].get('id'), filepath+os.sep+searchterm+str(x))
+        for x in len(photolist):
+            q.put((photolist[x].get('id'), filepath + os.sep + searchterm + str(x)))
+            toparse
+
+        # wait until the thread terminates.
+
+        for x in range(10):
+            t = threading.Thread(target=threader)
+
+            # classifying as a daemon, so they will die when the main dies
+            t.daemon = True
+
+            # begins, must come after daemon definition
+            t.start()
+
+
+
+
+        q.join()
+        print('done')
 
 def downloadimg(photo_id,name=''):
-    print(name)
 #downloads the image in largest resolution and marked as downloadable
     photo_id=str(photo_id)
     rqurl = "https://api.flickr.com/services/rest/" \
          "?method=flickr.photos.getSizes&api_key=" +apikey+\
-            "&photo_id="+photo_id+"&per_page=10&format=json&nojsoncallback=1"
+            "&photo_id="+photo_id+"&per_page=100&format=json&nojsoncallback=1"
 
     response = requests.get(rqurl).json()
 
@@ -57,8 +87,15 @@ def downloadimg(photo_id,name=''):
             url = response.get('size')[-1].get('source')
             print(url)
 
+            with writinglock:
+                urllib.request.urlretrieve(url, name+'.jpg')
 
-            urllib.request.urlretrieve(url, name+'.jpg')
+def threader():
+    while True:
+        worker = q.get()
+        downloadimg(worker[0],worker[1])
+        q.task_done()
+
+trying('pig', 80, 'pictures/test')
 
 
-trying('cow',5, 'pictures/test')
