@@ -3,33 +3,62 @@ import json
 import requests
 import urllib.request
 import urllib
+import os
+import os.path
+apikey= "a66325f81b70da9ac277c027cf9e7371"
+# hi= "a66325f81b70da9ac277c027cf9e7371"+"Secret: 49453dbf41f087e0"
 
-
-hi= "a66325f81b70da9ac277c027cf9e7371"+"Secret: 49453dbf41f087e0"
-
-def trying():
+def trying(searchterm,amount=10, path=''):
     apiurl = "https://api.flickr.com/services/rest/" \
-         "?method=flickr.photos.search&api_key=a66325f81b70da9ac277c027cf9e7371" \
-         "&tags=[bye,sad]&per_page=10&format=json&nojsoncallback=1"
+         "?method=flickr.photos.search&api_key="+apikey+\
+             "&text="+searchterm+"&per_page=10&format=json&nojsoncallback=1"
     response = requests.get(apiurl)
     response = response.json()
 
+    if path != "":
+        filepath = os.path.relpath(path,os.getcwd()+os.sep+searchterm)+os.sep+searchterm
+    else:
+        filepath = searchterm
+    if not os.path.exists(filepath):
+        os.makedirs(filepath)
 
 
-    print(response.get('photos').get('photo'))
 
-def findingimg():
+    if response.get("stat")=='ok':
+        response = response.get("photos")
+        total = int(response.get('total'))
+        if total > 4000 and amount > 4000:
+            print('flickr only allows for max 4000 image retrieval,saving first 4000')
+            toparse = 4000
+        elif total < amount:
+            toparse = total
+            print('not enought image found, saving existing'+response.get('total')+"images")
+        else:
+            toparse = amount
+            photolist = response.get('photo')
 
+        for x in range(0, toparse):
+            downloadimg(photolist[x].get('id'), filepath+os.sep+searchterm+str(x))
+
+def downloadimg(photo_id,name=''):
+    print(name)
+#downloads the image in largest resolution and marked as downloadable
+    photo_id=str(photo_id)
     rqurl = "https://api.flickr.com/services/rest/" \
-         "?method=flickr.photos.getSizes&api_key=a66325f81b70da9ac277c027cf9e7371" \
-         "&photo_id=41852424384&per_page=10&format=json&nojsoncallback=1"
+         "?method=flickr.photos.getSizes&api_key=" +apikey+\
+            "&photo_id="+photo_id+"&per_page=10&format=json&nojsoncallback=1"
 
     response = requests.get(rqurl).json()
-    print(response)
+
+    if response.get('stat')=='ok':
+        response= response.get('sizes')
+
+        if response.get("candownload") == 1:
+            url = response.get('size')[-1].get('source')
+            print(url)
 
 
+            urllib.request.urlretrieve(url, name+'.jpg')
 
 
-findingimg()
-urllib.request.urlretrieve("https://farm2.staticflickr.com/1755/41852424384_0b31a536d7_o.jpg", "00000001.jpg")
-
+trying('cow',5, 'pictures/test')
